@@ -1,0 +1,10 @@
+{
+  "name": "venuity",
+  "version": "0.1.0",
+  "description": "Venuity - Tauri desktop app",
+  "scripts": {
+    "dev": "cargo tauri dev",
+    "build": "cargo tauri build",
+    "tauri": "cargo tauri"
+  }
+}
