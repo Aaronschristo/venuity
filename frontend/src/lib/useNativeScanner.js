@@ -28,59 +28,101 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
+const STORAGE_KEY_CAMERAS = 'venuity_cameras';
+const STORAGE_KEY_SELECTED = 'venuity_selected_camera';
+
 export function useNativeScanner(onScan) {
-  const [cameras, setCameras] = useState([]);
-  const [selectedCamera, setSelectedCamera] = useState('');
+  // ─── State ──────────────────────────────────────────────────────────────────
+  // Initialize cameras and selection from localStorage for zero-latency UI load
+  const [cameras, setCameras] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY_CAMERAS) || '[]');
+    } catch {
+      return [];
+    }
+  });
+  
+  const [selectedCamera, setSelectedCameraState] = useState(() => {
+    return localStorage.getItem(STORAGE_KEY_SELECTED) || '';
+  });
+
   const [isActive, setIsActive] = useState(false);
   const [scannerState, setScannerState] = useState('placeholder');
   // States: 'placeholder' | 'loading' | 'active' | 'success' | 'error'
+
+  // Wrapper to persist selected camera changes from the dropdown
+  const setSelectedCamera = useCallback((id) => {
+    setSelectedCameraState(id);
+    localStorage.setItem(STORAGE_KEY_SELECTED, id);
+  }, []);
 
   // DOM refs — consumers must attach these to <video> and <canvas> elements
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Internal refs (don't need to trigger re-renders)
+  // Internal refs
   const streamRef = useRef(null);
   const rafRef = useRef(null);
-  const isActiveRef = useRef(false); // mirrors isActive for use inside RAF closure
+  const isActiveRef = useRef(false);
   const processingRef = useRef(false);
   const lastScanTimeRef = useRef(0);
 
-  // Keep isActiveRef in sync with isActive state
+  // Keep isActiveRef in sync
   useEffect(() => {
     isActiveRef.current = isActive;
   }, [isActive]);
 
-  // ─── Enumerate available cameras on mount ───────────────────────────────────
-  useEffect(() => {
-    // We need to request camera permission first before enumerateDevices gives
-    // us real labels (browser security requirement).
-    navigator.mediaDevices
-      .getUserMedia({ video: true })
-      .then((tempStream) => {
-        tempStream.getTracks().forEach((t) => t.stop()); // release immediately
-        return navigator.mediaDevices.enumerateDevices();
-      })
-      .then((devices) => {
-        const videoDevices = devices.filter((d) => d.kind === 'videoinput');
-        const cameraList = videoDevices.map((d, i) => ({
-          id: d.deviceId,
-          label: d.label || `Camera ${i + 1}`,
-        }));
-        setCameras(cameraList);
-        if (cameraList.length > 0) setSelectedCamera(cameraList[0].id);
-      })
-      .catch((err) => {
-        console.warn('[NativeScanner] Could not enumerate cameras:', err);
+  // ─── Enumerate & Update Cameras ─────────────────────────────────────────────
+  const refreshCameraList = useCallback(async (requestPermission = false) => {
+    try {
+      if (requestPermission) {
+        // Briefly request camera to trigger permission prompt & unmask labels
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        tempStream.getTracks().forEach((t) => t.stop());
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+      const cameraList = videoDevices.map((d, i) => ({
+        id: d.deviceId,
+        label: d.label || `Camera ${i + 1}`,
+      }));
+
+      setCameras(cameraList);
+      localStorage.setItem(STORAGE_KEY_CAMERAS, JSON.stringify(cameraList));
+
+      // Auto-select logic
+      setSelectedCameraState((currentSelected) => {
+        if (cameraList.length === 0) {
+          localStorage.removeItem(STORAGE_KEY_SELECTED);
+          return '';
+        }
+        // If current selection is invalid (e.g. unplugged), pick the first one
+        if (!currentSelected || !cameraList.some(c => c.id === currentSelected)) {
+          const newId = cameraList[0].id;
+          localStorage.setItem(STORAGE_KEY_SELECTED, newId);
+          return newId;
+        }
+        return currentSelected;
       });
+      
+    } catch (err) {
+      console.warn('[NativeScanner] Could not refresh cameras:', err);
+      throw err;
+    }
   }, []);
 
+  // ─── Device Change Listener ─────────────────────────────────────────────────
+  useEffect(() => {
+    const handleDeviceChange = () => {
+      // Re-enumerate silently (without forcing permission prompt) on hardware change
+      refreshCameraList(false);
+    };
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+  }, [refreshCameraList]);
+
   // ─── Frame capture ──────────────────────────────────────────────────────────
-  /**
-   * Draws the current video frame onto the offscreen canvas and returns it as
-   * a base64-encoded PNG string (without the data URI prefix), ready to send
-   * to Rust for decoding.
-   */
   const captureFrame = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -109,17 +151,10 @@ export function useNativeScanner(onScan) {
   }, []);
 
   // ─── Main scan loop ─────────────────────────────────────────────────────────
-  /**
-   * Runs on every animation frame while the scanner is active.
-   * Captures a frame, sends it to Rust, and fires onScan on success.
-   * The sentinel error 'no_qr_found' is silently ignored (normal when no QR
-   * code is in the camera view).
-   */
   const scanLoop = useCallback(async () => {
     if (!isActiveRef.current) return; // scanner was stopped
 
     if (processingRef.current) {
-      // Still waiting on the previous Rust call — skip frame to avoid piling up
       rafRef.current = requestAnimationFrame(scanLoop);
       return;
     }
@@ -142,10 +177,8 @@ export function useNativeScanner(onScan) {
 
     try {
       const decoded = await invoke('decode_qr_frame', { frameB64 });
-      // Rust returned a QR string — fire callback
       setScannerState('success');
       onScan(decoded);
-      // Brief pause before resuming scan loop to prevent re-scanning the same code
       setTimeout(() => {
         if (isActiveRef.current) {
           setScannerState('active');
@@ -156,37 +189,75 @@ export function useNativeScanner(onScan) {
     } catch (err) {
       const msg = String(err);
       if (!msg.includes('no_qr_found')) {
-        // Real decode error — log for debugging but don't crash
         console.warn('[NativeScanner] Decode error:', err);
       }
-      // In all error cases (including no_qr_found), just continue the loop
       processingRef.current = false;
       rafRef.current = requestAnimationFrame(scanLoop);
     }
   }, [captureFrame, onScan]);
 
-  // ─── Start scanner ──────────────────────────────────────────────────────────
-  /**
-   * Requests camera access, attaches the stream to the video element, and
-   * begins the scan loop.
-   */
-  const start = useCallback(async () => {
-    if (!selectedCamera) {
-      console.warn('[NativeScanner] No camera selected.');
-      return;
+  // ─── Stop scanner ───────────────────────────────────────────────────────────
+  const stop = useCallback(() => {
+    isActiveRef.current = false;
+    setIsActive(false);
+    processingRef.current = false;
+
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => {
+        t.onended = null;
+        t.stop();
+      });
+      streamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setScannerState('placeholder');
+  }, []);
+
+  // ─── Start scanner ──────────────────────────────────────────────────────────
+  const start = useCallback(async () => {
     setScannerState('loading');
     try {
+      // 1. Ensure permissions are granted and device list is fully populated
+      await refreshCameraList(true);
+      
+      // 2. Fetch the latest selected camera ID from localStorage directly
+      //    (since React state might not have updated yet if we just auto-selected)
+      const currentSelectedId = localStorage.getItem(STORAGE_KEY_SELECTED);
+
+      if (!currentSelectedId) {
+        throw new Error('No camera found or accessible');
+      }
+
+      // 3. Start Stream
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          deviceId: { exact: selectedCamera },
+          deviceId: { exact: currentSelectedId },
           width: { ideal: 1280 },
           height: { ideal: 720 },
           frameRate: { ideal: 30 },
         },
         audio: false,
       });
+      
       streamRef.current = stream;
+
+      // Handle physical disconnection (unplug) while running
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        track.onended = () => {
+          console.warn('[NativeScanner] Camera track ended unexpectedly (unplugged?).');
+          stop();
+        };
+      }
 
       const video = videoRef.current;
       if (!video) throw new Error('video element not mounted');
@@ -202,32 +273,9 @@ export function useNativeScanner(onScan) {
     } catch (err) {
       console.error('[NativeScanner] Failed to start camera:', err);
       setScannerState('placeholder');
-      throw err;
+      throw err; // Let consumer components handle the error (e.g. showToast)
     }
-  }, [selectedCamera, scanLoop]);
-
-  // ─── Stop scanner ───────────────────────────────────────────────────────────
-  const stop = useCallback(() => {
-    isActiveRef.current = false;
-    setIsActive(false);
-    processingRef.current = false;
-
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    setScannerState('placeholder');
-  }, []);
+  }, [refreshCameraList, scanLoop, stop]);
 
   // Toggle helper
   const toggle = useCallback(() => {
@@ -251,7 +299,7 @@ export function useNativeScanner(onScan) {
     isActive,
     scannerState,
     setScannerState,
-    // DOM refs — attach to <video> and <canvas> in JSX
+    // DOM refs
     videoRef,
     canvasRef,
   };

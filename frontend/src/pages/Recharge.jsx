@@ -181,7 +181,7 @@ function Recharge() {
               disabled={isActive}
             >
               {cameras.length === 0 ? (
-                <option value="">Detecting cameras...</option>
+                <option value="">Click Start to detect cameras...</option>
               ) : (
                 cameras.map((cam) => (
                   <option key={cam.id} value={cam.id}>{cam.label}</option>
