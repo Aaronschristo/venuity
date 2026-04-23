@@ -39,3 +39,5 @@ Research about other fuctionalities and features that we can add to the app.
 Data export feature.
 
 System-synced dark-mode.
+
+Build an android app.

@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=venuity
+      - POSTGRES_USER=venuityuser
+      - POSTGRES_PASSWORD=venuitypass
+    ports:
+      - "5432:5432"
+
+  web:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: sh -c "python backend/manage.py migrate && gunicorn --bind 0.0.0.0:8000 backend.config.wsgi:application"
+    volumes:
+      - ./backend:/app/backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgres://venuityuser:venuitypass@db:5432/venuity
+      - DJANGO_DEBUG=False
+
+volumes:
+  postgres_data:

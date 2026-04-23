@@ -6,5 +6,8 @@
     "dev": "cargo tauri dev",
     "build": "cargo tauri build",
     "tauri": "cargo tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/plugin-barcode-scanner": "^2.4.4"
   }
 }
