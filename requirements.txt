@@ -9,7 +9,7 @@ pandas>=2.2
 openpyxl>=3.1
 gunicorn>=21.2.0
 
-# Dev dependencies
+# Dev / testing
 pytest>=8.0.0
 pytest-django>=4.8.0
 black>=24.0.0
