@@ -177,73 +177,26 @@ Authorization: Bearer <access_token>
 
 ## 5. Frontend Integration Guide
 
-### 5.1 Update api.js
+### 5.1 API Client (`frontend/src/lib/api.js`)
 
+The API client is implemented with:
+- **Base URL** from `VITE_API_BASE_URL` environment variable
+- **Automatic JWT token injection** via Bearer header on every request
+- **Automatic 401 → refresh → retry** flow with concurrent request queuing
+- **Token storage** in localStorage (keys: `venuity_access_token`, `venuity_refresh_token`)
+- **`extractError()` helper** for normalizing Django error envelopes
+
+Key functions:
 ```js
-// frontend/src/lib/api.js
-
-const API_BASE = 'http://localhost:8000';
-
-let accessToken = null;
-export const setAccessToken = (token) => { accessToken = token; };
-export const clearAccessToken = () => { accessToken = null; };
-
-async function apiFetch(url, options = {}) {
-    const headers = { 'Content-Type': 'application/json', ...options.headers };
-    if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-    const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
-    const body = res.status !== 204 ? await res.json() : null;
-    return { status: res.status, body };
-}
-
-export const login = (username, password) =>
-    apiFetch('/api/v1/auth/token/', {
-        method: 'POST', body: JSON.stringify({ username, password }),
-    });
-
-// Stats (Dashboard)
-export const fetchStats = () => apiFetch('/api/v1/transactions/stats/');
-
-// Transactions
-export const fetchTransactions = (page = 1, pageSize = 10) =>
-    apiFetch(`/api/v1/transactions/?page=${page}&page_size=${pageSize}`);
-
-// Customers
-export const fetchCustomers = (page = 1, pageSize = 10) =>
-    apiFetch(`/api/v1/customers/?page=${page}&page_size=${pageSize}`);
-
-export const searchCustomers = (query, page = 1, pageSize = 10) =>
-    apiFetch(`/api/v1/customers/?search=${encodeURIComponent(query)}&page=${page}&page_size=${pageSize}`);
-
-export const createCustomer = (name, initialBalance, qrId = null) =>
-    apiFetch('/api/v1/customers/', {
-        method: 'POST',
-        body: JSON.stringify({ name, initial_balance: initialBalance, qr_id: qrId }),
-    });
-
-export const deleteCustomerApi = (publicId) =>
-    apiFetch(`/api/v1/customers/${publicId}/`, { method: 'DELETE' });
-
-export const rechargeCustomer = (customerId, amount) =>
-    apiFetch('/api/v1/customers/recharge/', {
-        method: 'POST', body: JSON.stringify({ customer_id: customerId, amount }),
-    });
-
-export const checkinCustomer = (qrId) =>
-    apiFetch('/api/v1/customers/checkin/', {
-        method: 'POST', body: JSON.stringify({ qr_id: qrId }),
-    });
-
-export const fetchSettings = () => apiFetch('/api/v1/settings/');
-export const saveSettings = (data) =>
-    apiFetch('/api/v1/settings/', { method: 'POST', body: JSON.stringify(data) });
-
-export const fetchAnalytics = (interval, metric, date) =>
-    apiFetch(`/api/v1/analytics/?interval=${interval}&metric=${metric}&date=${date}`);
-
-// QR Code image URL
-export const getQrCodeUrl = (qrId) => `${API_BASE}/media/qrcodes/${qrId}.png`;
+import { login, logout, fetchCurrentUser } from './lib/api';  // Auth
+import { fetchStats, fetchTransactions } from './lib/api';     // Dashboard
+import { fetchCustomers, createCustomer, deleteCustomerApi, rechargeCustomer, checkinCustomer } from './lib/api';
+import { fetchSettings, saveSettings, fetchBranding } from './lib/api';  // Settings
+import { fetchAnalytics } from './lib/api';                    // Analytics
+import { getQrCodeUrl, extractError } from './lib/api';        // Utilities
 ```
+
+See `frontend/src/lib/api.js` for the full implementation.
 
 ### 5.2 Response Shape Changes
 
@@ -416,6 +369,16 @@ python backend/manage.py startapp myapp backend/apps/myapp
 
 ## 9. Running Locally
 
+### Environment Setup
+
+```bash
+# 1. Copy environment template
+copy backend\.env.example backend\.env
+
+# 2. Edit backend\.env — set SECRET_KEY to a random value
+#    (leave other values as defaults for development)
+```
+
 ### Start the Server
 
 ```bash
@@ -427,6 +390,12 @@ API: `http://127.0.0.1:8000/api/v1/`
 Admin: `http://127.0.0.1:8000/admin/`
 
 Default dev credentials: `admin / admin`
+
+### Create a Superuser (first time setup)
+
+```bash
+.\venv\Scripts\python.exe backend\manage.py createsuperuser
+```
 
 ### Run Tests
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
-import { searchCustomers, rechargeCustomer } from '../lib/api';
+import { searchCustomers, rechargeCustomer, extractError } from '../lib/api';
 import { useNativeScanner } from '../lib/useNativeScanner';
 import './Recharge.css';
 
@@ -47,9 +47,12 @@ function Recharge() {
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const { body } = await searchCustomers(val);
-        setAutocompleteItems(body);
-        setShowAutocomplete(body.length > 0);
+        const { status, body } = await searchCustomers(val);
+        if (status === 200 && body) {
+          const results = body.results || [];
+          setAutocompleteItems(results);
+          setShowAutocomplete(results.length > 0);
+        }
       } catch {
         setShowAutocomplete(false);
       }
@@ -58,7 +61,7 @@ function Recharge() {
 
   const selectCustomer = useCallback((m) => {
     setCustomerName(m.name);
-    setCustomerId(m.id);
+    setCustomerId(m.public_id);
     setShowAutocomplete(false);
   }, []);
 
@@ -67,13 +70,15 @@ function Recharge() {
     async (e) => {
       e.preventDefault();
       const { status, body } = await rechargeCustomer(customerId, amount);
-      if (status === 200) {
-        showToast(`Recharge successful! New balance: ${formatCurrency(body.new_balance)}`);
+      if (status === 200 && body) {
+        // Django response: { success: true, customer: { name, balance } }
+        const newBalance = body.customer?.balance ?? body.new_balance ?? 0;
+        showToast(`Recharge successful! New balance: ${formatCurrency(newBalance)}`);
         setCustomerName('');
         setCustomerId('');
         setAmount('');
       } else {
-        showToast(body.error, 'error');
+        showToast(extractError(body, 'Recharge failed'), 'error');
       }
     },
     [customerId, amount, showToast, formatCurrency]
@@ -228,7 +233,7 @@ function Recharge() {
                 >
                   {autocompleteItems.map((m) => (
                     <div
-                      key={m.id}
+                      key={m.public_id}
                       style={{
                         padding: '10px 15px',
                         cursor: 'pointer',
@@ -241,7 +246,7 @@ function Recharge() {
                     >
                       <strong>{m.name}</strong>
                       <small style={{ color: 'var(--text-light)', float: 'right' }}>
-                        {m.id.substring(0, 8)}...
+                        {m.public_id.substring(0, 8)}...
                       </small>
                     </div>
                   ))}

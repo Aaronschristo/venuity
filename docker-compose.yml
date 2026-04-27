@@ -16,16 +16,17 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: sh -c "python backend/manage.py migrate && gunicorn --bind 0.0.0.0:8000 backend.config.wsgi:application"
+    command: sh -c "python backend/manage.py migrate && gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
     volumes:
-      - ./backend:/app/backend
+      - ./backend:/app
     ports:
       - "8000:8000"
     depends_on:
       - db
+    env_file:
+      - backend/.env
     environment:
       - DATABASE_URL=postgres://venuityuser:venuitypass@db:5432/venuity
-      - DJANGO_DEBUG=False
 
 volumes:
   postgres_data:

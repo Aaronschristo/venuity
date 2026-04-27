@@ -7,7 +7,7 @@ function Dashboard() {
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [transactions, setTransactions] = useState([]);
-  const [offset, setOffset] = useState(10);
+  const [page, setPage] = useState(2); // Page 1 is loaded from stats
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -17,12 +17,14 @@ function Dashboard() {
   const loadStats = useCallback(async () => {
     setInitialLoading(true);
     try {
-      const { body } = await fetchStats();
-      setTotalCustomers(body.total_customers);
-      setTotalRevenue(body.total_revenue);
-      setTransactions(body.recent_transactions || []);
-      setOffset(10);
-      setHasMore(true);
+      const { status, body } = await fetchStats();
+      if (status === 200 && body) {
+        setTotalCustomers(body.total_customers || 0);
+        setTotalRevenue(parseFloat(body.total_revenue) || 0);
+        setTransactions(body.recent_transactions || []);
+        setPage(2);
+        setHasMore(true);
+      }
     } catch (err) {
       console.error('Could not load stats', err);
     } finally {
@@ -34,25 +36,28 @@ function Dashboard() {
     loadStats();
   }, [loadStats]);
 
-  // Infinite scroll for transactions
+  // Infinite scroll for transactions — page-based pagination
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const { body: txs } = await fetchTransactions(offset, 10);
-      if (txs.length === 0) {
-        setHasMore(false);
-      } else {
-        setTransactions((prev) => [...prev, ...txs]);
-        setOffset((prev) => prev + txs.length);
-        if (txs.length < 10) setHasMore(false);
+      const { status, body } = await fetchTransactions(page, 10);
+      if (status === 200 && body) {
+        const results = body.results || [];
+        if (results.length === 0 || !body.next) {
+          setHasMore(false);
+        }
+        if (results.length > 0) {
+          setTransactions((prev) => [...prev, ...results]);
+          setPage((prev) => prev + 1);
+        }
       }
     } catch (err) {
       console.error('Could not load more transactions', err);
     } finally {
       setLoadingMore(false);
     }
-  }, [offset, loadingMore, hasMore]);
+  }, [page, loadingMore, hasMore]);
 
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
@@ -159,9 +164,10 @@ function Dashboard() {
               ) : (
                 transactions.map((tx, i) => {
                   const isCheckin = tx.type === 'checkin';
+                  const amt = parseFloat(tx.amount) || 0;
                   const amountDisplay = isCheckin
-                    ? `-${cs}${tx.amount.toFixed(2)}`
-                    : `+${cs}${tx.amount.toFixed(2)}`;
+                    ? `-${cs}${amt.toFixed(2)}`
+                    : `+${cs}${amt.toFixed(2)}`;
                   const amountColor = isCheckin ? 'var(--text-dark)' : 'var(--success)';
                   const icon = isCheckin ? 'bx-up-arrow-alt' : 'bx-down-arrow-alt';
                   const iconColor = isCheckin ? 'var(--danger)' : 'var(--success)';

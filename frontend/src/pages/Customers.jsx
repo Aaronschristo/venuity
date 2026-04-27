@@ -7,6 +7,7 @@ import {
   createCustomer,
   deleteCustomerApi,
   getQrCodeUrl,
+  extractError,
 } from '../lib/api';
 import { useNativeScanner } from '../lib/useNativeScanner';
 import './Customers.css';
@@ -18,7 +19,7 @@ function Customers() {
   const [customers, setCustomers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [initialLoading, setInitialLoading] = useState(true);
-  const [offset, setOffset] = useState(10);
+  const [page, setPage] = useState(2); // Page 1 loaded initially
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -26,7 +27,7 @@ function Customers() {
   const [issueModal, setIssueModal] = useState(false);
   const [viewQrModal, setViewQrModal] = useState(false);
   const [assignModal, setAssignModal] = useState(false);
-  const [qrData, setQrData] = useState({ name: '', id: '' });
+  const [qrData, setQrData] = useState({ name: '', publicId: '', qrId: '' });
 
   // Issue form
   const [newName, setNewName] = useState('');
@@ -40,12 +41,14 @@ function Customers() {
     async (query = '') => {
       setInitialLoading(true);
       try {
-        const { body } = query
+        const { status, body } = query
           ? await searchCustomers(query)
-          : await fetchCustomers();
-        setCustomers(body);
-        setOffset(10);
-        setHasMore(true);
+          : await fetchCustomers(1, 10);
+        if (status === 200 && body) {
+          setCustomers(body.results || []);
+          setPage(2);
+          setHasMore(body.next !== null);
+        }
       } catch {
         // handled
       } finally {
@@ -71,27 +74,30 @@ function Customers() {
     [loadCustomers]
   );
 
-  // Infinite scroll
+  // Infinite scroll — page-based
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const { body } = searchQuery
-        ? await searchCustomers(searchQuery, offset, 10)
-        : await fetchCustomers(offset, 10);
-      if (body.length === 0) {
-        setHasMore(false);
-      } else {
-        setCustomers((prev) => [...prev, ...body]);
-        setOffset((prev) => prev + body.length);
-        if (body.length < 10) setHasMore(false);
+      const { status, body } = searchQuery
+        ? await searchCustomers(searchQuery, page, 10)
+        : await fetchCustomers(page, 10);
+      if (status === 200 && body) {
+        const results = body.results || [];
+        if (results.length === 0 || !body.next) {
+          setHasMore(false);
+        }
+        if (results.length > 0) {
+          setCustomers((prev) => [...prev, ...results]);
+          setPage((prev) => prev + 1);
+        }
       }
     } catch {
       // handled
     } finally {
       setLoadingMore(false);
     }
-  }, [offset, loadingMore, hasMore, searchQuery]);
+  }, [page, loadingMore, hasMore, searchQuery]);
 
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
@@ -114,32 +120,36 @@ function Customers() {
     async (e) => {
       e.preventDefault();
       const { status, body } = await createCustomer(newName, newBalance);
-      if (status === 201) {
+      if (status === 201 && body) {
         showToast('Customer created successfully!');
         setNewName('');
         setNewBalance('0');
         setIssueModal(false);
         loadCustomers(searchQuery);
-        setQrData({ name: newName, id: body.id });
+        setQrData({
+          name: body.name || newName,
+          publicId: body.public_id,
+          qrId: body.qr_id,
+        });
         setViewQrModal(true);
       } else {
-        showToast(body.error, 'error');
+        showToast(extractError(body, 'Failed to create customer'), 'error');
       }
     },
     [newName, newBalance, showToast, loadCustomers, searchQuery]
   );
 
   // View QR
-  const showQR = useCallback((id, name) => {
-    setQrData({ name, id });
+  const showQR = useCallback((publicId, qrId, name) => {
+    setQrData({ name, publicId, qrId });
     setViewQrModal(true);
   }, []);
 
   // Download QR
   const downloadQR = useCallback(() => {
-    if (qrData.id) {
+    if (qrData.qrId) {
       const a = document.createElement('a');
-      a.href = getQrCodeUrl(qrData.id);
+      a.href = getQrCodeUrl(qrData.qrId);
       a.download = `QR_${qrData.name}.png`;
       document.body.appendChild(a);
       a.click();
@@ -149,18 +159,19 @@ function Customers() {
 
   // Delete customer
   const handleDelete = useCallback(
-    async (id, name) => {
+    async (publicId, name) => {
       if (
         window.confirm(
           `Are you sure you want to permanently delete customer "${name}"?\nThis action cannot be undone and will permanently wipe their transaction history.`
         )
       ) {
-        const { status, body } = await deleteCustomerApi(id);
-        if (status === 200) {
+        const { status, body } = await deleteCustomerApi(publicId);
+        // Django returns 204 on successful delete
+        if (status === 204 || status === 200) {
           showToast(`Customer "${name}" deleted successfully.`, 'success');
           loadCustomers(searchQuery);
         } else {
-          showToast(body.error, 'error');
+          showToast(extractError(body, 'Failed to delete customer'), 'error');
         }
       }
     },
@@ -238,11 +249,13 @@ function Customers() {
                 </tr>
               ) : (
                 customers.map((c) => (
-                  <tr key={c.id} className="table-row">
+                  <tr key={c.public_id} className="table-row">
                     <td data-label="Name">
                       <div className="user-info">
                         <strong>{c.name}</strong>
-                        <span className="user-id-truncate" title={c.id}>{c.id}</span>
+                        <span className="user-id-truncate" title={c.public_id}>
+                          {c.public_id}
+                        </span>
                       </div>
                     </td>
                     <td data-label="Balance" style={{ fontWeight: 600, color: 'var(--text-dark)' }}>
@@ -254,14 +267,14 @@ function Customers() {
                         <button
                           className="btn btn-amount"
                           style={{ padding: '6px 12px', fontSize: '13px' }}
-                          onClick={() => showQR(c.id, c.name)}
+                          onClick={() => showQR(c.public_id, c.qr_id, c.name)}
                         >
                           <i className="bx bx-qr" /> View
                         </button>
                         <button
                           className="btn btn-danger-soft"
                           style={{ padding: '6px 12px', fontSize: '13px' }}
-                          onClick={() => handleDelete(c.id, c.name)}
+                          onClick={() => handleDelete(c.public_id, c.name)}
                         >
                           <i className="bx bx-trash" /> Delete
                         </button>
@@ -341,10 +354,10 @@ function Customers() {
           <h2 style={{ marginBottom: '10px' }}>{qrData.name}</h2>
           <p style={{ color: 'var(--text-light)', marginBottom: '20px' }}>
             Customer ID:{' '}
-            <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{qrData.id}</span>
+            <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{qrData.publicId}</span>
           </p>
           <div style={{ background: 'white', padding: '10px', borderRadius: '12px', display: 'inline-block', boxShadow: 'var(--box-shadow)' }}>
-            <img src={getQrCodeUrl(qrData.id)} alt="QR Code" style={{ width: '250px', height: '250px' }} />
+            <img src={getQrCodeUrl(qrData.qrId)} alt="QR Code" style={{ width: '250px', height: '250px' }} />
           </div>
           <div style={{ marginTop: '25px' }}>
             <button className="btn btn-primary" onClick={downloadQR}>
@@ -383,7 +396,7 @@ function AssignQRModal({ onClose, onSuccess, currencySymbol }) {
       showToast('Existing QR assigned successfully!');
       onSuccess();
     } else {
-      showToast(body.error, 'error');
+      showToast(extractError(body, 'Failed to assign QR'), 'error');
     }
   };
 

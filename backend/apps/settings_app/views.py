@@ -2,10 +2,12 @@
 Views for the settings app.
 
 Endpoints:
-    GET  /api/v1/settings/ — Get all settings (staff)
-    POST /api/v1/settings/ — Update settings (admin only)
+    GET  /api/v1/settings/          — Get all settings (staff)
+    POST /api/v1/settings/          — Update settings (admin only)
+    GET  /api/v1/settings/branding/ — Get branding settings (public, no auth)
 """
 
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -40,3 +42,28 @@ class ApplicationSettingsView(APIView):
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(updated)
+
+
+class BrandingSettingsView(APIView):
+    """
+    GET /api/v1/settings/branding/
+
+    Returns branding/white-label settings WITHOUT requiring authentication.
+    This endpoint is called by the frontend login page to display the
+    correct logo, business name, and theme colors before the user logs in.
+
+    Response:
+        {
+            "business_name": "PlayArea Manager",
+            "primary_color": "#6366f1",
+            "primary_hover_color": "#4f46e5",
+            "logo_url": "/logo.png",
+            "app_title": "Venuity"
+        }
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        branding = services.get_branding_settings()
+        return Response(branding)

@@ -813,3 +813,28 @@ th {
 .modal-backdrop.open {
   display: flex;
 }
+
+/* ===================================================================
+   Sidebar Logout Item
+   =================================================================== */
+.sidebar-logout-item {
+  margin-top: auto !important;
+  padding-top: 20px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.sidebar-logout-link {
+  color: var(--danger) !important;
+}
+
+.sidebar-logout-link:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-left-color: var(--danger) !important;
+}
+
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 80px);
+  overflow-y: auto;
+}

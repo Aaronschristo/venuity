@@ -4,6 +4,10 @@ Service layer for the settings app.
 Provides typed accessors for individual settings.
 All casting and defaults live here — callers get Python types, not strings.
 
+Settings are organized into two categories:
+    1. Business settings — business_name, currency_symbol, checkin_fee
+    2. Branding settings — primary_color, primary_hover_color, logo_url, app_title
+
 When adding a new setting:
     1. Add a DEFAULTS entry.
     2. Add a typed getter function.
@@ -21,14 +25,36 @@ logger = logging.getLogger(__name__)
 # Canonical keys and defaults
 # ---------------------------------------------------------------------------
 
+# Business settings
 SETTING_BUSINESS_NAME   = 'business_name'
 SETTING_CURRENCY_SYMBOL = 'currency_symbol'
 SETTING_CHECKIN_FEE     = 'checkin_fee'
 
+# Branding / White-label settings
+SETTING_PRIMARY_COLOR       = 'primary_color'
+SETTING_PRIMARY_HOVER_COLOR = 'primary_hover_color'
+SETTING_LOGO_URL            = 'logo_url'
+SETTING_APP_TITLE           = 'app_title'
+
 DEFAULTS = {
-    SETTING_BUSINESS_NAME:   'PlayArea Manager',
-    SETTING_CURRENCY_SYMBOL: '₹',
-    SETTING_CHECKIN_FEE:     '100.00',
+    # Business
+    SETTING_BUSINESS_NAME:       'PlayArea Manager',
+    SETTING_CURRENCY_SYMBOL:     '₹',
+    SETTING_CHECKIN_FEE:         '100.00',
+    # Branding
+    SETTING_PRIMARY_COLOR:       '#6366f1',
+    SETTING_PRIMARY_HOVER_COLOR: '#4f46e5',
+    SETTING_LOGO_URL:            '/logo.png',
+    SETTING_APP_TITLE:           'Venuity',
+}
+
+# Keys that belong to the branding category (served without auth)
+BRANDING_KEYS = {
+    SETTING_BUSINESS_NAME,
+    SETTING_PRIMARY_COLOR,
+    SETTING_PRIMARY_HOVER_COLOR,
+    SETTING_LOGO_URL,
+    SETTING_APP_TITLE,
 }
 
 
@@ -62,11 +88,18 @@ def get_all_settings() -> dict:
 
     Missing keys fall back to defaults.
     """
-    return {
-        SETTING_BUSINESS_NAME:   _get(SETTING_BUSINESS_NAME),
-        SETTING_CURRENCY_SYMBOL: _get(SETTING_CURRENCY_SYMBOL),
-        SETTING_CHECKIN_FEE:     _get(SETTING_CHECKIN_FEE),
-    }
+    return {key: _get(key) for key in DEFAULTS}
+
+
+def get_branding_settings() -> dict:
+    """
+    Return only branding/white-label settings.
+
+    These are served on an unauthenticated endpoint so the login
+    page can display the correct logo, business name, and colors
+    before the user has logged in.
+    """
+    return {key: _get(key) for key in BRANDING_KEYS}
 
 
 def get_checkin_fee() -> Decimal:
@@ -97,6 +130,7 @@ def update_settings(data: dict) -> dict:
     """
     allowed_keys = set(DEFAULTS.keys())
 
+    # Validate checkin_fee if present
     if SETTING_CHECKIN_FEE in data:
         try:
             fee = Decimal(str(data[SETTING_CHECKIN_FEE]))
@@ -104,6 +138,13 @@ def update_settings(data: dict) -> dict:
                 raise ValueError('checkin_fee cannot be negative.')
         except InvalidOperation:
             raise ValueError(f'Invalid checkin_fee: {data[SETTING_CHECKIN_FEE]!r}')
+
+    # Validate color format if present
+    for color_key in (SETTING_PRIMARY_COLOR, SETTING_PRIMARY_HOVER_COLOR):
+        if color_key in data:
+            color_val = str(data[color_key]).strip()
+            if color_val and not color_val.startswith('#'):
+                raise ValueError(f'Invalid color format for {color_key}: must start with #')
 
     for key in allowed_keys:
         if key in data:

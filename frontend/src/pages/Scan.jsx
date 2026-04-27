@@ -1,7 +1,7 @@
 import { useState, useCallback, memo } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
-import { checkinCustomer } from '../lib/api';
+import { checkinCustomer, extractError } from '../lib/api';
 import { useNativeScanner } from '../lib/useNativeScanner';
 import './Scan.css';
 
@@ -9,7 +9,7 @@ function Scan() {
   const { settings } = useSettings();
   const showToast = useToast();
   const cs = settings.currency_symbol || '₹';
-  const fee = settings.checkin_fee || '100.0';
+  const fee = settings.checkin_fee || '100.00';
 
   // ─── Overlay display data ─────────────────────────────────────────────────
   const [overlayData, setOverlayData] = useState({ name: '', msg: '', errTitle: '', errMsg: '' });
@@ -19,20 +19,27 @@ function Scan() {
   // The hook has already set scannerState → 'success' at this point.
   const onScan = useCallback(async (qrText) => {
     try {
-      const { status, body } = await checkinCustomer(qrText);
-      if (status === 200) {
+      const { status, body } = await checkinCustomer(qrText, true);
+      if (status === 200 && body) {
+        // Django response: { success: true, customer: { name, balance }, fee_charged }
+        const customerName = body.customer?.name || body.customer_name || 'Customer';
+        const balance = parseFloat(body.customer?.balance ?? body.remaining_balance ?? 0);
+        const feeCharged = body.fee_charged || fee;
+
         setOverlayData({
-          name: body.customer_name,
-          msg: `Balance: ${cs}${body.remaining_balance.toFixed(2)}`,
+          name: customerName,
+          msg: `Balance: ${cs}${balance.toFixed(2)}`,
           errTitle: '',
           errMsg: '',
+          feeCharged: feeCharged,
         });
-        showToast(`Checked in ${body.customer_name}`, 'success');
+        showToast(`Checked in ${customerName}`, 'success');
         // scannerState stays 'success'; hook resumes loop after 2 s automatically
       } else {
-        setOverlayData({ name: '', msg: '', errTitle: 'Check-in Failed', errMsg: body.error || 'Unknown error' });
+        const errMsg = extractError(body, 'Check-in failed');
+        setOverlayData({ name: '', msg: '', errTitle: 'Check-in Failed', errMsg });
         setScannerState('error');
-        showToast(body.error || 'Check-in failed', 'error');
+        showToast(errMsg, 'error');
       }
     } catch {
       setOverlayData({ name: '', msg: '', errTitle: 'Network Error', errMsg: 'Could not reach server.' });
@@ -40,7 +47,7 @@ function Scan() {
       showToast('Network error during check-in', 'error');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cs, showToast]);
+  }, [cs, fee, showToast]);
 
   const {
     start, stop, toggle,
@@ -131,7 +138,7 @@ function Scan() {
                 <div className="icon-circle success pulse"><i className="bx bx-check" /></div>
                 <h3>{overlayData.name}</h3>
                 <p className="highlight-text">{overlayData.msg}</p>
-                <div className="fee-deducted">-{cs}{fee} Entry Fee</div>
+                <div className="fee-deducted">-{cs}{parseFloat(overlayData.feeCharged || fee).toFixed(2)} Entry Fee</div>
               </div>
             </div>
           )}
@@ -186,7 +193,7 @@ function Scan() {
             </button>
           </div>
           <div className="fee-info">
-            <div className="fee-badge">{cs}{fee}</div>
+            <div className="fee-badge">{cs}{parseFloat(fee).toFixed(2)}</div>
             <span>Standard Entry Fee</span>
           </div>
         </div>

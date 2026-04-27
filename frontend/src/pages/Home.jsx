@@ -1,8 +1,8 @@
 import { memo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { getApiBase, fetchLatestInstaller } from '../lib/api';
 import './Home.css';
 
 const CARDS = [
@@ -16,29 +16,13 @@ const CARDS = [
 
 function Home() {
   const { settings, theme, toggleTheme } = useSettings();
+  const { user, logout } = useAuth();
   const showToast = useToast();
 
-  // Detect if Windows browser (not Tauri) for download button
-  const isWindows = navigator.userAgent.indexOf('Win') !== -1;
-  const isTauri = !!window.__TAURI_INTERNALS__;
-  const showDownload = isWindows && !isTauri;
-
-  const handleDownload = useCallback(async () => {
-    try {
-      const { status, body } = await fetchLatestInstaller();
-      if (status === 200 && body.url) {
-        const link = document.createElement('a');
-        link.href = `${getApiBase()}${body.url}`;
-        link.download = body.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast(`Downloading Venuity ${body.version}...`);
-      }
-    } catch {
-      showToast('Installer not available yet', 'error');
-    }
-  }, [showToast]);
+  const handleLogout = useCallback(async () => {
+    await logout();
+    showToast('Logged out successfully', 'success');
+  }, [logout, showToast]);
 
   return (
     <>
@@ -50,22 +34,32 @@ function Home() {
         />
       </div>
 
-      {/* Floating Download Windows App */}
-      {showDownload && (
-        <div
-          className="download-fab"
-          onClick={handleDownload}
-          title="Download Venuity for Windows"
-          style={{ display: 'flex' }}
-        >
-          <i className="bx bxl-windows" style={{ fontSize: '24px', color: 'var(--text-dark)' }} />
-        </div>
-      )}
+      {/* Floating Logout */}
+      <div
+        className="download-fab"
+        onClick={handleLogout}
+        title="Logout"
+        style={{ display: 'flex' }}
+      >
+        <i className="bx bx-log-out" style={{ fontSize: '24px', color: 'var(--text-dark)' }} />
+      </div>
 
       <h1 className="hero-title">
         <img src="/logo.png" alt="Logo" className="hero-logo-img" />
         <span>{settings.business_name}</span>
       </h1>
+
+      {/* User greeting */}
+      {user && (
+        <p style={{
+          color: 'var(--text-light)',
+          fontSize: '14px',
+          marginTop: '-8px',
+          textAlign: 'center',
+        }}>
+          Welcome, <strong style={{ color: 'var(--text-dark)' }}>{user.username}</strong>
+        </p>
+      )}
 
       <div className="home-grid">
         {CARDS.map((card) => (

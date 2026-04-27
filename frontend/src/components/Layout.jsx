@@ -1,6 +1,23 @@
+/**
+ * Layout — Main Application Shell.
+ *
+ * Provides the persistent sidebar navigation and topbar
+ * that wraps all authenticated pages.
+ *
+ * Features:
+ *   - Responsive sidebar (collapsible on desktop, drawer on mobile)
+ *   - Active route highlighting
+ *   - Theme toggle (dark/light)
+ *   - Logout button
+ *   - User info display
+ *
+ * @module Layout
+ */
+
 import { useState, useEffect, useCallback, memo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 
 const NAV_ITEMS = [
   { path: '/', icon: 'bx-home', label: 'Home' },
@@ -14,6 +31,7 @@ const NAV_ITEMS = [
 
 function Layout({ title, children }) {
   const { settings, theme, toggleTheme } = useSettings();
+  const { user, logout } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [sidebarState, setSidebarState] = useState(() => {
     if (window.innerWidth <= 768) return 'closed'; // mobile default
@@ -42,6 +60,11 @@ function Layout({ title, children }) {
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setSidebarState('closed');
   }, [isMobile]);
+
+  const handleLogout = useCallback(async () => {
+    closeMobileSidebar();
+    await logout();
+  }, [logout, closeMobileSidebar]);
 
   // Build sidebar className
   let sidebarClass = 'sidebar';
@@ -84,6 +107,21 @@ function Layout({ title, children }) {
               </NavLink>
             </li>
           ))}
+
+          {/* Logout — pinned at the bottom */}
+          <li className="sidebar-logout-item">
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleLogout();
+              }}
+              className="sidebar-logout-link"
+            >
+              <i className="bx bx-log-out" />
+              <span className="links_name">Logout</span>
+            </a>
+          </li>
         </ul>
       </nav>
 
@@ -100,11 +138,36 @@ function Layout({ title, children }) {
             <i className="bx bx-menu" onClick={handleSidebarToggle} />
             <span className="dashboard-title">{title}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {/* User info */}
+            {user && (
+              <span
+                className="topbar-user-info"
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--text-light)',
+                  display: isMobile ? 'none' : 'inline',
+                }}
+              >
+                <i className="bx bx-user-circle" style={{ fontSize: '18px', verticalAlign: 'middle', marginRight: '4px' }} />
+                {user.username}
+              </span>
+            )}
+
+            {/* Theme toggle */}
             <i
               className={`bx ${theme === 'dark' ? 'bx-sun' : 'bx-moon'}`}
               style={{ cursor: 'pointer', fontSize: '24px', color: 'var(--text-dark)' }}
               onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            />
+
+            {/* Logout icon (topbar) */}
+            <i
+              className="bx bx-log-out"
+              style={{ cursor: 'pointer', fontSize: '22px', color: 'var(--text-light)' }}
+              onClick={handleLogout}
+              title="Logout"
             />
           </div>
         </nav>

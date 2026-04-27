@@ -1,43 +1,55 @@
-Make QR scanning faster and bug-free.
+[ ] Make QR scanning faster and bug-free.
 
-Handle errors in checkin and recharge properly.
+[ ] Handle errors in checkin and recharge properly.
 
-display the user name along with the id in the recharge page.
+[ ] display the user name along with the id in the recharge page.
 
-Transform the app into a SAP using shell.
+[ ] Transform the app into a SAP using shell.
 
-Clean up the code base.
+[x] Clean up the code base.
 
-Make the code base scalable and customisable(even the logo, color scheme and all).
+[x] Make the code base scalable and customisable(even the logo, color scheme and all).
 
-Introduce CI/CD pipeline for builds in multiple operating systems.
+[ ] Introduce CI/CD pipeline for builds in multiple operating systems.
 
-Introduce unit testing.
+[ ] Introduce unit testing.
 
-Deploy locally using docker containers.
+[ ] Deploy locally using docker containers.
 
-Integrate with test-sprite MCP
+[ ] Integrate with test-sprite MCP
 
-Improve the versioning during building and deployment.
+[ ] Improve the versioning during building and deployment.
 
-Initialize camera once and use in everypage.
+[ ] Initialize camera once and use in everypage.
 
-Integrate code rabbit.
+[ ] Integrate code rabbit.
 
-Develop plans to make this project into a app only mode elimating the need of the web app.
+[ ] Develop plans to make this project into a app only mode elimating the need of the web app.
 
-implement user roles and authentication.
+[x] implement user roles and authentication.
 
-Store things like logos and other ui elements in the tauri app itself instead of the server. 
+[ ] Store things like logos and other ui elements in the tauri app itself instead of the server. 
 
-add proper error handling across the app when internet is not available(espectially in the tauri app).
+[ ] add proper error handling across the app when internet is not available(espectially in the tauri app).
 
-Transition from Flask to django for back end.
+[x] Transition from Flask to django for back end.
 
-Research about other fuctionalities and features that we can add to the app.
+[ ] Research about other fuctionalities and features that we can add to the app.
 
-Data export feature.
+[ ] Data export feature.
 
-System-synced dark-mode.
+[ ] System-synced dark-mode.
 
-Build an android app.
+[ ] Build an android app.
+
+[x] add proper white-labeling features
+
+[ ] add marketing features.
+
+[x] improve the ui, according to deekshith and make it more professional.
+
+[ ] add more data in the analytics page.
+
+[ ] the qr code scanning interface is not still smooth, the camera keeps restarting, Proper data is not being shows etc.
+
+Distributed FEC Management System.
