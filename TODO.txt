@@ -53,3 +53,31 @@
 [ ] the qr code scanning interface is not still smooth, the camera keeps restarting, Proper data is not being shows etc.
 
 Distributed FEC Management System.
+
+add party management features.
+
+add basic crm features.
+
+research about modules we can add to it.
+
+add basic inventory management and sales feature.
+
+make a proper dashboard for admins to look at the stats of the business in the form of graphs and charts.
+
+make advanced analytics and report generation features.
+with tax, invoice etc.
+
+add features to generate invoice for customers.
+
+add each customer management features add feilds like date of birth, gender, phone, email, address etc.
+
+add features for veiwing each customer acivity.
+
+add payment features.
+
+develope a proper system archetecture.
+
+research about proper rfied implementation.
+
+Do better branding.
+

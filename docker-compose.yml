@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: sh -c "python backend/manage.py migrate && gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
+    command: sh -c "python manage.py migrate && gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
     volumes:
       - ./backend:/app
     ports:
