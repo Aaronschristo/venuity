@@ -11,6 +11,7 @@ django-cors-headers>=4.3
 # Environment & Config
 python-decouple>=3.8
 dj-database-url>=2.1.0
+psycopg2-binary>=2.9.9
 
 # QR Code Generation
 pillow>=12.1.1
