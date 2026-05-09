@@ -81,3 +81,15 @@ research about proper rfied implementation.
 
 Do better branding.
 
+setup a proper postgresql.
+
+develope a dpr
+
+make the website look less like ai generated.
+
+optimize the database and data retrieval
+
+develope proper caching.
+
+develope a ai prompt template or design model or ai instructions.
+
