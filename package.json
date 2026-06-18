@@ -9,11 +9,11 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-barcode-scanner": "^2.4.4",
     "@tauri-apps/plugin-log": "^2.8.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.1"
+    "@tauri-apps/cli": "^2.11.2"
   }
 }
