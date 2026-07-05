@@ -1,5 +1,8 @@
 # Venuity - PlayArea Manager
 
+> [!WARNING]
+> This project is under **active development**. The deployed website may not always reflect the latest code in this repository. For the most accurate and up-to-date implementation, please refer to the source code here rather than the live demo.
+
 A premium, cross-platform application designed for PlayArea businesses to manage digital customer check-ins, wallet top-ups, and point-of-sale functionality securely using QR code scanning capabilities. 
 
 Built with a modernized tech stack:
